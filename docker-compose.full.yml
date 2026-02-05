@@ -1,0 +1,165 @@
+# =============================================================================
+# DocuMind Full Stack Docker Compose
+# =============================================================================
+# This file runs the ENTIRE application in Docker, including the API.
+# Use this for:
+#   - Testing production-like deployment locally
+#   - Demos without any local setup
+#   - CI/CD pipelines
+#
+# Usage:
+#   docker-compose -f docker-compose.full.yml up --build
+#   docker-compose -f docker-compose.full.yml down -v  # Clean slate
+
+version: "3.8"
+
+services:
+  # ===========================================================================
+  # DocuMind API
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: documind-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://documind:documind@postgres:5432/documind
+      - DATABASE_URL_SYNC=postgresql://documind:documind@postgres:5432/documind
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      # Add your API keys here or use .env file
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - upload_data:/app/data/uploads
+      - processed_data:/app/data/processed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ===========================================================================
+  # Celery Worker - Background Task Processing
+  # ===========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: documind-worker
+    restart: unless-stopped
+    command: celery -A documind.workers.celery_app worker --loglevel=info
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://documind:documind@postgres:5432/documind
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    volumes:
+      - upload_data:/app/data/uploads
+      - processed_data:/app/data/processed
+    depends_on:
+      - api
+      - redis
+      - postgres
+      - qdrant
+
+  # ===========================================================================
+  # PostgreSQL
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: documind-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: documind
+      POSTGRES_PASSWORD: documind
+      POSTGRES_DB: documind
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U documind -d documind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Redis
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: documind-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Qdrant
+  # ===========================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: documind-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Frontend (Next.js)
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: documind-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      - api
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  upload_data:
+  processed_data:
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  default:
+    name: documind_network
