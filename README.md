@@ -1,4 +1,4 @@
-# DocuMind - Enterprise Document Intelligence Platform
+# CorpusIQ - Enterprise Document Intelligence Platform
 
 > AI-powered document intelligence platform that transforms enterprise documents into a searchable, queryable knowledge base using RAG (Retrieval-Augmented Generation).
 
