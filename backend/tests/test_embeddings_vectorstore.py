@@ -5,13 +5,12 @@ Embeddings and Vector Store Test
 Tests the complete embedding + storage + retrieval pipeline.
 
 Requirements:
-- OPENAI_API_KEY environment variable set
+- GOOGLE_API_KEY environment variable set
 - Qdrant running on localhost:6333
 
 How to run:
     cd backend
-    set OPENAI_API_KEY=your-key-here  # Windows
-    export OPENAI_API_KEY=your-key-here  # Mac/Linux
+    $env:GOOGLE_API_KEY = "your-key-here"  # PowerShell
     python -m tests.test_embeddings_vectorstore
 """
 
@@ -19,11 +18,10 @@ import os
 import sys
 from pathlib import Path
 
-# Add backend to path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.embeddings import OpenAIEmbedder, EmbeddingResult
+from app.embeddings import GoogleEmbedder, EmbeddingResult
 from app.vectorstore import QdrantVectorStore, VectorRecord, SearchResponse
 
 
@@ -33,18 +31,19 @@ def print_header(title: str) -> None:
     print("=" * 60)
 
 
-def test_openai_embedder():
-    """Test OpenAI embedding generation."""
-    print_header("Testing OpenAI Embedder")
+def test_google_embedder():
+    """Test Google embedding generation."""
+    print_header("Testing Google Embedder")
     
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("SKIPPED: OPENAI_API_KEY not set")
-        print("Set it with: set OPENAI_API_KEY=your-key-here")
+        print("SKIPPED: GOOGLE_API_KEY not set")
+        print("Get your key at: https://aistudio.google.com/app/apikey")
+        print("Then set it: $env:GOOGLE_API_KEY = \"your-key-here\"")
         return False
     
     try:
-        embedder = OpenAIEmbedder(api_key=api_key)
+        embedder = GoogleEmbedder(api_key=api_key)
         
         # Test single embedding
         print("\n--- Single Text Embedding ---")
@@ -52,7 +51,6 @@ def test_openai_embedder():
         
         print(f"Model: {result.model}")
         print(f"Dimensions: {result.dimensions}")
-        print(f"Tokens used: {result.tokens_used}")
         print(f"Vector (first 5): {result.embedding[:5]}")
         
         # Test batch embedding
@@ -67,22 +65,19 @@ def test_openai_embedder():
         
         print(f"Embedded {len(results)} texts")
         for i, r in enumerate(results):
-            print(f"  Text {i+1}: {r.dimensions} dimensions, {r.tokens_used} tokens")
+            print(f"  Text {i+1}: {r.dimensions} dimensions")
         
         # Test semantic similarity
         print("\n--- Semantic Similarity Test ---")
         
-        # These should be similar
         text1 = "The cat sat on the mat"
         text2 = "A feline rested on a rug"
-        # This should be different
         text3 = "Stock prices rose sharply today"
         
         emb1 = embedder.embed_text(text1).embedding
         emb2 = embedder.embed_text(text2).embedding
         emb3 = embedder.embed_text(text3).embedding
         
-        # Calculate cosine similarity
         def cosine_similarity(a, b):
             dot = sum(x*y for x, y in zip(a, b))
             norm_a = sum(x*x for x in a) ** 0.5
@@ -100,11 +95,11 @@ def test_openai_embedder():
         else:
             print("⚠ Unexpected: dissimilar text has higher score")
         
-        print("\n✓ OpenAI Embedder test PASSED")
+        print("\n✓ Google Embedder test PASSED")
         return True
         
     except Exception as e:
-        print(f"\n✗ OpenAI Embedder test FAILED: {e}")
+        print(f"\n✗ Google Embedder test FAILED: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -116,8 +111,6 @@ def test_qdrant_connection():
     
     try:
         store = QdrantVectorStore(host="localhost", port=6333)
-        
-        # Try to list collections
         collections = store.client.get_collections()
         print(f"Connected to Qdrant successfully")
         print(f"Existing collections: {[c.name for c in collections.collections]}")
@@ -129,7 +122,6 @@ def test_qdrant_connection():
         print(f"\n✗ Qdrant Connection test FAILED: {e}")
         print("\nMake sure Qdrant is running:")
         print("  docker start qdrant")
-        print("  or: docker run -d -p 6333:6333 --name qdrant qdrant/qdrant")
         return False
 
 
@@ -141,17 +133,14 @@ def test_qdrant_operations():
         store = QdrantVectorStore(host="localhost", port=6333)
         collection_name = "test_collection"
         
-        # Clean up if exists
         if store.collection_exists(collection_name):
             store.delete_collection(collection_name)
             print(f"Deleted existing collection: {collection_name}")
         
-        # Create collection
         print("\n--- Create Collection ---")
-        store.create_collection(collection_name, vector_size=4)  # Small vectors for testing
+        store.create_collection(collection_name, vector_size=4)
         print(f"Created collection: {collection_name}")
         
-        # Insert vectors
         print("\n--- Insert Vectors ---")
         records = [
             VectorRecord(
@@ -174,13 +163,11 @@ def test_qdrant_operations():
         store.insert(collection_name, records)
         print(f"Inserted {len(records)} vectors")
         
-        # Get collection info
         info = store.get_collection_info(collection_name)
         print(f"Collection info: {info}")
         
-        # Search
         print("\n--- Search ---")
-        query_vector = [0.12, 0.22, 0.32, 0.42]  # Similar to doc1 chunks
+        query_vector = [0.12, 0.22, 0.32, 0.42]
         
         response = store.search(collection_name, query_vector, limit=3)
         
@@ -188,7 +175,6 @@ def test_qdrant_operations():
         for r in response.results:
             print(f"  ID: {r.id}, Score: {r.score:.4f}, Content: {r.payload.get('content')}")
         
-        # Search with filter
         print("\n--- Search with Filter ---")
         response_filtered = store.search(
             collection_name,
@@ -201,15 +187,10 @@ def test_qdrant_operations():
         for r in response_filtered.results:
             print(f"  ID: {r.id}, Score: {r.score:.4f}")
         
-        # Delete
         print("\n--- Delete ---")
         store.delete(collection_name, ["doc2_chunk1"])
         print("Deleted doc2_chunk1")
         
-        info_after = store.get_collection_info(collection_name)
-        print(f"Vectors after delete: {info_after.get('vectors_count')}")
-        
-        # Cleanup
         store.delete_collection(collection_name)
         print(f"\nCleaned up: deleted {collection_name}")
         
@@ -227,26 +208,29 @@ def test_full_pipeline():
     """Test complete embedding + storage + retrieval pipeline."""
     print_header("Testing Full Pipeline")
     
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        print("SKIPPED: OPENAI_API_KEY not set")
+        print("SKIPPED: GOOGLE_API_KEY not set")
         return False
     
     try:
-        # Initialize components
-        embedder = OpenAIEmbedder(api_key=api_key)
+        embedder = GoogleEmbedder(api_key=api_key)
         store = QdrantVectorStore(host="localhost", port=6333)
         collection_name = "test_full_pipeline"
         
-        # Clean up
         if store.collection_exists(collection_name):
             store.delete_collection(collection_name)
         
-        # Create collection with correct dimensions
-        store.create_collection(collection_name, vector_size=embedder.get_dimensions())
-        print(f"Created collection with {embedder.get_dimensions()} dimensions")
+        # First, embed one text to get the actual dimensions
+        sample_embedding = embedder.embed_text("sample text")
+        actual_dimensions = sample_embedding.dimensions
         
-        # Sample documents
+        print(f"Detected embedding dimensions: {actual_dimensions}")
+        
+        # Now create collection with correct dimensions
+        store.create_collection(collection_name, vector_size=actual_dimensions)
+        print(f"Created collection with {actual_dimensions} dimensions")
+        
         documents = [
             {"id": "1", "content": "Python is a programming language known for its simplicity.", "topic": "programming"},
             {"id": "2", "content": "Machine learning algorithms can learn from data.", "topic": "ml"},
@@ -255,7 +239,6 @@ def test_full_pipeline():
             {"id": "5", "content": "JavaScript is used for web development.", "topic": "programming"},
         ]
         
-        # Embed and store
         print("\n--- Embedding and Storing Documents ---")
         records = []
         for doc in documents:
@@ -270,7 +253,6 @@ def test_full_pipeline():
         store.insert(collection_name, records)
         print(f"\nStored {len(records)} documents")
         
-        # Search
         print("\n--- Semantic Search ---")
         queries = [
             "What programming languages are easy to learn?",
@@ -281,17 +263,14 @@ def test_full_pipeline():
         for query in queries:
             print(f"\nQuery: '{query}'")
             
-            # Embed query
-            query_embedding = embedder.embed_text(query).embedding
+            query_embedding = embedder.embed_query(query).embedding
             
-            # Search
             response = store.search(collection_name, query_embedding, limit=2)
             
             print(f"Top results:")
             for r in response.results:
                 print(f"  Score: {r.score:.4f} | {r.payload.get('content')[:50]}...")
         
-        # Cleanup
         store.delete_collection(collection_name)
         print(f"\nCleaned up collection")
         
@@ -313,19 +292,15 @@ def main():
     
     results = []
     
-    # Test Qdrant first (doesn't need API key)
     results.append(("Qdrant Connection", test_qdrant_connection()))
     
-    # Only continue if Qdrant is working
     if results[-1][1]:
         results.append(("Qdrant Operations", test_qdrant_operations()))
-        results.append(("OpenAI Embedder", test_openai_embedder()))
+        results.append(("Google Embedder", test_google_embedder()))
         
-        # Only run full pipeline if embedder works
         if results[-1][1]:
             results.append(("Full Pipeline", test_full_pipeline()))
     
-    # Summary
     print_header("Test Summary")
     
     passed = sum(1 for _, result in results if result)

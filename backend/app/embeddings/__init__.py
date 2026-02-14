@@ -4,20 +4,25 @@ Embeddings Package
 
 Converts text into vector embeddings for semantic search.
 
+Available Embedders:
+- OpenAIEmbedder: Uses OpenAI API (paid)
+- GoogleEmbedder: Uses Google Gemini API (free tier available)
+
 Usage:
-    from app.embeddings import OpenAIEmbedder
+    from app.embeddings import GoogleEmbedder
     
-    embedder = OpenAIEmbedder()
+    embedder = GoogleEmbedder()
     result = embedder.embed_text("Hello world")
     print(f"Dimensions: {result.dimensions}")
-    print(f"Vector: {result.embedding[:5]}...")  # First 5 values
 """
 
 from .base import BaseEmbedder, EmbeddingResult
 from .openai_embedder import OpenAIEmbedder
+from .google_embedder import GoogleEmbedder
 
 __all__ = [
     "BaseEmbedder",
     "EmbeddingResult",
     "OpenAIEmbedder",
+    "GoogleEmbedder",
 ]
