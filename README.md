@@ -67,11 +67,11 @@ make run
 ## Project Progress
 
 - [x] Project structure setup
-- [ ] Module 1: Document Ingestion
-- [ ] Module 2: OCR Integration
-- [ ] Module 3: Table Extraction
-- [ ] Module 4: Intelligent Chunking
-- [ ] Module 5: Embeddings & Vector Store
+- [x] Module 1: Document Ingestion
+- [x] Module 2: OCR Integration
+- [x] Module 3: Table Extraction
+- [x] Module 4: Intelligent Chunking
+- [x] Module 5: Embeddings & Vector Store
 - [ ] Module 6: Hybrid Search
 - [ ] Module 7: LLM Integration
 - [ ] Module 8: Entity Extraction
